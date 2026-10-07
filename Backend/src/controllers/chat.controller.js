@@ -2,44 +2,64 @@ import { generateResponse , generateChatTitle} from "../services/ai.service.js";
 import Chat from "../models/chat.model.js";
 import Message from "../models/message.model.js";
 
-export async function createChat(req, res){
-    const { message , chat : chatId} =req.body;
-    const userId = req.user.id
+export async function createChat(req, res) {
+    const { message, chatId } = req.body;
+    const userId = req.user.id;
+
     try {
-        let chat = null
-        let title = null
-        if(!chatId){
-            title = await generateChatTitle(message)
+        let chat;
+        if (!chatId) {
+            const title = await generateChatTitle(message);
+
             chat = await Chat.create({
-                title:title,
-                user:userId
-            })
+                title: title,
+                user: userId
+            });
         }
+        else {
+            chat = await Chat.findOne({
+                _id: chatId,
+                user: userId
+            });
+
+            if (!chat) {
+                return res.status(404).json({
+                    message: "Chat not found"
+                });
+            }
+        }
+
         const userMessage = await Message.create({
             chat: chat._id,
-            role : "user",
-            content : message
-        })
+            role: "user",
+            content: message
+        });
 
         const messages = await Message.find({
-            chat: chatId || chat._id
-        })
-        
-        const response = await generateResponse(messages)
+            chat: chat._id
+        }).sort({ createdAt: 1 });
+
+        const response = await generateResponse(messages);
 
         const aiMessage = await Message.create({
-            chat: chat?._id || chatId,
-            role : "ai",
-            content : response
-        })
+            chat: chat._id,
+            role: "ai",
+            content: response
+        });
+
         return res.status(200).json({
             chat,
-            aiMessage,
-            userMessage
-        })
+            userMessage,
+            aiMessage
+        });
+
     } catch (error) {
-        throw new Error(error.message)
-    }    
+        console.log("Create chat error:", error);
+
+        return res.status(500).json({
+            message: error.message
+        });
+    }
 }
 
 export async function getChats(req , res){
